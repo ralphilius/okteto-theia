@@ -16,6 +16,12 @@ spec:
       - backend:
           serviceName: theia
           servicePort: 80
+  - host: 5000-theia-ralphilius.cloud.okteto.net
+    http:
+      paths:
+      - backend:
+          serviceName: theia
+          servicePort: 5000
 ---
 apiVersion: v1
 kind: Service
@@ -27,11 +33,26 @@ spec:
  - port: 80
    name: "80"
    targetPort: 3000
- - port: 3001
-   name: "3001"
-   targetPort: 3001
+ - port: 5000
+   name: "5000"
+   targetPort: 5000
  selector:
    app: theia
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: theia-pvc
+  namespace: ralphilius
+  labels:
+    app: theia
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: standard
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -45,14 +66,39 @@ spec:
     matchLabels:
       app: theia
   replicas: 1
+  strategy:
+    type: Recreate
   template:
     metadata:
       labels:
         app: theia
     spec:
+      volumes:
+      - name: storage
+        persistentVolumeClaim:
+          claimName: theia-pvc
+      - name: ssh-secret-volume
+        secret:
+          secretName: mba-ssh-key
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
       containers:
       - image: theiaide/theia-full:latest
         imagePullPolicy: Always
         name: theia
+        resources:
+          requests:
+             memory: "4Gi"
+             cpu: 2
+          limits:
+             memory: "4Gi"
+             cpu: 2
         ports:
         - containerPort: 3000
+        volumeMounts:
+        - name: storage
+          mountPath: "/home/project"
+        - name: ssh-secret-volume
+          mountPath: "/home/theia/.ssh"
